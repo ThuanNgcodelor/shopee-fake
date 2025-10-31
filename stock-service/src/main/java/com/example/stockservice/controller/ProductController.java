@@ -21,6 +21,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 
 @RequestMapping("/v1/stock/product")
@@ -171,6 +172,15 @@ public class ProductController {
         Page<ProductDto> dtoPage = products.map(this::toDto);
 
         return ResponseEntity.ok(dtoPage);
+    }
+
+    @GetMapping("/shop-owner/{userId}/ids")
+    ResponseEntity<List<String>> getProductIdsByShopOwner(@PathVariable String userId) {
+        List<Product> products = productService.getAllProductsByUserId(userId);
+        List<String> productIds = products.stream()
+                .map(Product::getId)
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(productIds);
     }
 
     private ProductDto toDto(Product product) {

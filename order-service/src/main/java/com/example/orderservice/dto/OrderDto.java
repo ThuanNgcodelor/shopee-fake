@@ -8,10 +8,13 @@ import java.util.List;
 public class OrderDto {
     private String id;
     private String userId;
+    private String addressId;
     private Double totalPrice;
     private String orderStatus;
     private String notes;
     private String shippingAddress;
+    private String recipientPhone;
+    private String fullAddress;
     private String paymentMethod;
     private LocalDateTime creationTimestamp;
     private LocalDateTime updateTimestamp;

@@ -14,16 +14,49 @@ import lombok.RequiredArgsConstructor;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class OrderServiceImpl implements OrderService {
+
+    // Get data for shop owner orders
+    @Override
+    public Page<Order> getOrdersByShopOwner(String shopOwnerId, String status, Integer pageNo, Integer pageSize) {
+        // 1. Get all productIds belonging to this shop owner from stock-service
+        List<String> productIds = stockServiceClient.getProductIdsByShopOwner(shopOwnerId).getBody();
+
+        if (productIds == null || productIds.isEmpty()) {
+            return Page.empty(); // No products = no orders
+        }
+
+        // 2. Query orders that have orderItems with these productIds
+        Pageable pageable = PageRequest.of(pageNo - 1, pageSize);
+        OrderStatus orderStatus = (status != null && !status.isEmpty())
+                ? OrderStatus.valueOf(status.toUpperCase())
+                : null;
+
+        return orderRepository.findByShopOwnerProducts(productIds,pageable, orderStatus);
+    }
+
+    @Override
+    public List<Order> getOrdersByShopOwner(String shopOwnerId, String status) {
+        List<String> productIds = stockServiceClient.getProductIdsByShopOwner(shopOwnerId).getBody();
+        if (productIds == null || productIds.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return orderRepository.findByOrderItemsProductIdIn(productIds);
+    }
+
     private final OrderRepository orderRepository;
     private final StockServiceClient stockServiceClient;
     private final UserServiceClient userServiceClient;
@@ -227,7 +260,6 @@ public class OrderServiceImpl implements OrderService {
         return orderRepository.findAll();
     }
 
-
     // Address-related methods
     @Override
     public List<AddressDto> getUserAddresses(HttpServletRequest request) {
@@ -256,7 +288,6 @@ public class OrderServiceImpl implements OrderService {
     }
 
     // ====== Helpers Tạo order ======
-
     private Order initPendingOrder(String userId, String addressId) {
         Order order = Order.builder()
                 .userId(userId)
@@ -320,11 +351,8 @@ public class OrderServiceImpl implements OrderService {
             } catch (Exception e) {
                 log.error("[CONSUMER] Failed to remove cart item - productId: {}, sizeId: {}, error: {}", 
                     item.getProductId(), item.getSizeId(), e.getMessage(), e);
-                // Continue with next item even if one fails
             }
         }
-        
-        log.info("[CONSUMER] Cart cleanup completed for userId: {}", userId);
     }
 
     private void notifyOrderPlaced(Order order) {

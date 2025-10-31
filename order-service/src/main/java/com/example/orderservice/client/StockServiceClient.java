@@ -12,6 +12,8 @@ import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 
 @FeignClient(name = "stock-service", path = "/v1/stock",configuration = FeignConfig.class)
 public interface StockServiceClient {
@@ -42,4 +44,7 @@ public interface StockServiceClient {
 
     @PostMapping(value = "/cart/removeItemsByUserId", headers = "X-Internal-Call=true")
     ResponseEntity<Void> removeCartItemsByUserId(@RequestBody RemoveCartItemByUserIdRequest request);
+
+    @GetMapping(value = "/product/shop-owner/{userId}/ids", headers = "X-Internal-Call=true")
+    ResponseEntity<List<String>> getProductIdsByShopOwner(@PathVariable String userId);
 }
