@@ -100,63 +100,66 @@ services:
       - "3306:3306"
     volumes:
       - mysql_data:/var/lib/mysql
-    networks:
-      - shopee-network
+    networks: [shopee-network]
 
   zookeeper:
-    image: bitnami/zookeeper:3.9        # tag hợp lệ
+    image: confluentinc/cp-zookeeper:7.6.1   # ZK ổn định
     container_name: zookeeper
     restart: unless-stopped
     environment:
-      - ALLOW_ANONYMOUS_LOGIN=yes
+      ZOOKEEPER_CLIENT_PORT: "2181"
+      ZOOKEEPER_TICK_TIME: "2000"
     ports:
       - "2181:2181"
-    volumes:
-      - zookeeper_data:/bitnami
-    networks:
-      - shopee-network
+    networks: [shopee-network]
 
   kafka:
-    image: bitnami/kafka:3.7            # ổn định với Zookeeper
+    image: confluentinc/cp-kafka:7.6.1       # Kafka ổn định
     container_name: kafka
     restart: unless-stopped
-    depends_on:
-      - zookeeper
+    depends_on: [zookeeper]
     environment:
-      - KAFKA_CFG_ZOOKEEPER_CONNECT=zookeeper:2181
+      KAFKA_BROKER_ID: "1"
+      KAFKA_ZOOKEEPER_CONNECT: "zookeeper:2181"
+
+      # 2 listener: nội bộ & ngoài máy
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,EXTERNAL://0.0.0.0:9094
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,EXTERNAL://PUBLIC_IP:9094
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+
+      # Single-node defaults
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: "0"
     ports:
-      - "9092:9092"   # INTERNAL cho các container khác và kafka-ui
-      - "9094:9094"   # EXTERNAL cho client bên ngoài (dùng IP public)
-    volumes:
-      - kafka_data:/bitnami
-    networks:
-      - shopee-network
+      - "9092:9092"   # internal (các container + kafka-ui)
+      - "9094:9094"   # external (client ngoài VPS)
+    networks: [shopee-network]
 
   kafka-ui:
     image: provectuslabs/kafka-ui:latest
     container_name: kafka-ui
     restart: unless-stopped
-    depends_on:
-      - kafka
+    depends_on: [kafka]
     environment:
-      - KAFKA_CLUSTERS_0_NAME=local
-      - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafka:9092
-      - KAFKA_CLUSTERS_0_ZOOKEEPER=zookeeper:2181
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
     ports:
       - "9090:8080"
-    networks:
-      - shopee-network
+    networks: [shopee-network]
 
   redis:
-    image: redis:latest
+    image: redis:7
     container_name: redis
     restart: unless-stopped
     ports:
       - "6379:6379"
     volumes:
       - redis_data:/data
-    networks:
-      - shopee-network
+    networks: [shopee-network]
 
 volumes:
   zookeeper_data:
