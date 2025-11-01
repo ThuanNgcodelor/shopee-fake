@@ -240,27 +240,36 @@ sudo systemctl start docker
 sudo systemctl enable docker
 sudo usermod -aG docker $USER
 
-# Tạo thư mục infrastructure
-sudo mkdir -p /opt/shopee-infra
-sudo chown $USER:$USER /opt/shopee-infra
-
-# Copy file docker-compose.yml vào /opt/shopee-infra
-# (hoặc clone repo infrastructure nếu có repo riêng)
-
-# Khởi động infrastructure
-cd /opt/shopee-infra
+# Khởi động infrastructure (docker-compose nằm trong shopee-fake)
+cd /opt/shopee/shopee-fake
 docker-compose up -d
 
-# Kiểm tra
+# Kiểm tra containers đang chạy
 docker ps
+
+# Xem logs nếu cần
+docker-compose logs -f
 ```
+
+**Lưu ý:** Docker-compose nằm trong `/opt/shopee/shopee-fake`, không phải `/opt/shopee-infra`.
 
 ---
 
-### 1.6. Build tất cả Backend Services
+### 1.6. Kiểm tra và Build Backend Services
+
+**Trên server, các services đã được build JAR sẵn trong `shopee-fake`.**
+
+Kiểm tra xem đã có JAR files chưa:
+```bash
+cd /opt/shopee/shopee-fake
+# Kiểm tra xem có các file JAR trong các thư mục service
+ls -la */target/*.jar
+```
+
+**Nếu chưa có JAR hoặc cần rebuild:**
 
 ```bash
-cd /opt/shopee
+cd /opt/shopee/shopee-fake
 
 # Build từng service (mất thời gian lần đầu)
 cd config-server && mvn clean package -DskipTests && cd ..
@@ -284,73 +293,75 @@ cd file-storage && mvn clean package -DskipTests && cd ..
 cat > /opt/shopee/start-services.sh << 'EOF'
 #!/bin/bash
 
-cd /opt/shopee
-
-# Đảm bảo infrastructure đang chạy
-cd /opt/shopee-infra
+# Đảm bảo infrastructure đang chạy (docker-compose nằm trong shopee-fake)
+cd /opt/shopee/shopee-fake
 docker-compose up -d
 
 # Đợi infrastructure sẵn sàng
+echo "Waiting for infrastructure to be ready..."
 sleep 20
 
+# Tạo thư mục logs
 cd /opt/shopee
 mkdir -p logs
 
 # Start Config Server
 echo "Starting Config Server..."
-cd config-server
-nohup java -jar target/config-server-0.0.1-SNAPSHOT.jar > ../logs/config-server.log 2>&1 &
+cd /opt/shopee/shopee-fake/config-server
+nohup java -jar target/config-server-0.0.1-SNAPSHOT.jar > /opt/shopee/logs/config-server.log 2>&1 &
 sleep 5
 
 # Start Eureka Server
 echo "Starting Eureka Server..."
-cd ../eureka-server
-nohup java -jar target/eureka-server-0.0.1-SNAPSHOT.jar > ../logs/eureka-server.log 2>&1 &
+cd /opt/shopee/shopee-fake/eureka-server
+nohup java -jar target/eureka-server-0.0.1-SNAPSHOT.jar > /opt/shopee/logs/eureka-server.log 2>&1 &
 sleep 15
 
 # Start Gateway
 echo "Starting Gateway..."
-cd ../gateway
-nohup java -jar target/gateway-0.0.1-SNAPSHOT.jar > ../logs/gateway.log 2>&1 &
+cd /opt/shopee/shopee-fake/gateway
+nohup java -jar target/gateway-0.0.1-SNAPSHOT.jar > /opt/shopee/logs/gateway.log 2>&1 &
 sleep 5
 
 # Start Auth Service
 echo "Starting Auth Service..."
-cd ../auth-service
-nohup java -jar target/auth-service-0.0.1-SNAPSHOT.jar > ../logs/auth-service.log 2>&1 &
+cd /opt/shopee/shopee-fake/auth-service
+nohup java -jar target/auth-service-0.0.1-SNAPSHOT.jar > /opt/shopee/logs/auth-service.log 2>&1 &
 sleep 5
 
 # Start User Service
 echo "Starting User Service..."
-cd ../user-service
-nohup java -jar target/user-service-0.0.1-SNAPSHOT.jar > ../logs/user-service.log 2>&1 &
+cd /opt/shopee/shopee-fake/user-service
+nohup java -jar target/user-service-0.0.1-SNAPSHOT.jar > /opt/shopee/logs/user-service.log 2>&1 &
 sleep 5
 
 # Start Stock Service
 echo "Starting Stock Service..."
-cd ../stock-service
-nohup java -jar target/stock-service-0.0.1-SNAPSHOT.jar > ../logs/stock-service.log 2>&1 &
+cd /opt/shopee/shopee-fake/stock-service
+nohup java -jar target/stock-service-0.0.1-SNAPSHOT.jar > /opt/shopee/logs/stock-service.log 2>&1 &
 sleep 5
 
 # Start Order Service
 echo "Starting Order Service..."
-cd ../order-service
-nohup java -jar target/order-service-0.0.1-SNAPSHOT.jar > ../logs/order-service.log 2>&1 &
+cd /opt/shopee/shopee-fake/order-service
+nohup java -jar target/order-service-0.0.1-SNAPSHOT.jar > /opt/shopee/logs/order-service.log 2>&1 &
 sleep 5
 
 # Start Notification Service
 echo "Starting Notification Service..."
-cd ../notification-service
-nohup java -jar target/notification-service-0.0.1-SNAPSHOT.jar > ../logs/notification-service.log 2>&1 &
+cd /opt/shopee/shopee-fake/notification-service
+nohup java -jar target/notification-service-0.0.1-SNAPSHOT.jar > /opt/shopee/logs/notification-service.log 2>&1 &
 sleep 5
 
 # Start File Storage Service
 echo "Starting File Storage Service..."
-cd ../file-storage
-nohup java -jar target/file-storage-0.0.1-SNAPSHOT.jar > ../logs/file-storage.log 2>&1 &
+cd /opt/shopee/shopee-fake/file-storage
+nohup java -jar target/file-storage-0.0.1-SNAPSHOT.jar > /opt/shopee/logs/file-storage.log 2>&1 &
 
-echo "All services started!"
-echo "Check logs in /opt/shopee/logs/"
+echo ""
+echo "✅ All services started!"
+echo "📋 Check logs in /opt/shopee/logs/"
+echo "🔍 Use './check-services.sh' to check status"
 EOF
 
 chmod +x /opt/shopee/start-services.sh
@@ -389,17 +400,20 @@ cat > /opt/shopee/check-services.sh << 'EOF'
 echo "=== Service Status ==="
 echo ""
 
-echo "Infrastructure (Docker):"
-cd /opt/shopee-infra
+echo "📦 Infrastructure (Docker):"
+cd /opt/shopee/shopee-fake
 docker-compose ps
 
 echo ""
-echo "Java Services:"
+echo "☕ Java Services:"
 ps aux | grep -E "config-server|eureka-server|gateway|auth-service|user-service|stock-service|order-service|notification-service|file-storage" | grep -v grep
 
 echo ""
-echo "Ports in use:"
+echo "🔌 Ports in use:"
 netstat -tlnp 2>/dev/null | grep -E "8080|8761|8888|8001|8002|8004|8005|8009|8010" || ss -tlnp | grep -E "8080|8761|8888|8001|8002|8004|8005|8009|8010"
+
+echo ""
+echo "📝 Recent logs location: /opt/shopee/logs/"
 EOF
 
 chmod +x /opt/shopee/check-services.sh
@@ -407,15 +421,27 @@ chmod +x /opt/shopee/check-services.sh
 
 ---
 
-### 1.8. Cấu hình Nginx
+### 1.8. Kiểm tra Nginx (Đã cấu hình sẵn)
 
-#### Tạo Nginx Config
+**Nginx đã được cấu hình sẵn**, bạn chỉ cần kiểm tra:
 
 ```bash
-sudo nano /etc/nginx/sites-available/shopee
+# Kiểm tra config Nginx có đúng không
+sudo nginx -t
+
+# Xem config hiện tại
+sudo cat /etc/nginx/sites-available/shopee
+# hoặc
+sudo cat /etc/nginx/sites-enabled/shopee
+
+# Reload Nginx nếu cần
+sudo systemctl reload nginx
+
+# Kiểm tra Nginx đang chạy
+sudo systemctl status nginx
 ```
 
-**Paste nội dung sau:**
+**Cấu hình Nginx chuẩn** (để tham khảo, đã có sẵn trên server):
 
 ```nginx
 server {
@@ -468,20 +494,43 @@ server {
 }
 ```
 
-**Kích hoạt config:**
+---
+
+### 1.9. 🚀 Chạy Services lần đầu
+
+Sau khi đã tạo các scripts, bạn có thể chạy services:
 
 ```bash
-# Tạo symbolic link
-sudo ln -s /etc/nginx/sites-available/shopee /etc/nginx/sites-enabled/
+cd /opt/shopee
 
-# Xóa default config nếu không cần
-sudo rm /etc/nginx/sites-enabled/default
+# Chạy script khởi động tất cả services
+./start-services.sh
 
-# Test config
-sudo nginx -t
+# Kiểm tra status
+./check-services.sh
 
-# Reload Nginx
-sudo systemctl reload nginx
+# Xem logs của từng service
+tail -f logs/gateway.log
+tail -f logs/eureka-server.log
+```
+
+**Thứ tự khởi động:**
+1. ✅ Infrastructure (Docker): MySQL, Redis, Kafka
+2. ✅ Config Server (port 8888)
+3. ✅ Eureka Server (port 8761) - đợi Config chạy xong
+4. ✅ Gateway (port 8080) - đợi Eureka chạy xong
+5. ✅ Các services khác: Auth, User, Stock, Order, Notification, File Storage
+
+**Sau khi tất cả services chạy xong:**
+```bash
+# Kiểm tra tất cả services đang chạy
+./check-services.sh
+
+# Test Gateway
+curl http://localhost:8080/actuator/health
+
+# Test qua Nginx
+curl http://shopee-fake.id.vn/api/actuator/health
 ```
 
 ---
@@ -509,6 +558,10 @@ git push origin main
 ssh root@103.216.119.235
 cd /opt/shopee
 git pull origin main
+
+# Nếu code nằm trong shopee-fake, cần pull vào đó
+cd /opt/shopee/shopee-fake
+git pull origin main  # Nếu có git repo riêng cho shopee-fake
 ```
 
 ---
@@ -516,7 +569,7 @@ git pull origin main
 ### Bước 3: Rebuild Backend Services (nếu có thay đổi)
 
 ```bash
-cd /opt/shopee
+cd /opt/shopee/shopee-fake
 
 # Chỉ rebuild services có thay đổi
 # Ví dụ: nếu thay đổi Gateway và Auth Service
@@ -524,6 +577,7 @@ cd gateway
 mvn clean package -DskipTests
 cd ../auth-service
 mvn clean package -DskipTests
+cd ..
 ```
 
 ---
@@ -533,16 +587,19 @@ mvn clean package -DskipTests
 ```bash
 cd /opt/shopee/merier-fe
 
-# Cài đặt dependencies (nếu có package.json mới)
+# Cài đặt dependencies (nếu có package.json mới hoặc package-lock.json thay đổi)
 npm install
 
-# Build production
+# Build production (quan trọng!)
 npm run build -- --mode production
 
 # Build sẽ tạo thư mục dist/ chứa các file static
+# Nginx sẽ serve files từ /opt/shopee/merier-fe/dist
 ```
 
-**Lưu ý:** Frontend đã được cấu hình để tự động dùng `/api` trong production mode, nên không cần file `.env.production`.
+**Lưu ý:** 
+- Frontend đã được cấu hình để tự động dùng `/api` trong production mode, nên không cần file `.env.production`.
+- Sau khi build, Nginx sẽ tự động serve files từ thư mục `dist/`.
 
 ---
 
@@ -582,11 +639,27 @@ sudo systemctl reload nginx
 
 ### Production (Server)
 1. Push code lên Git
-2. SSH vào server → `git pull`
-3. Rebuild services có thay đổi
-4. Build frontend (`npm run build -- --mode production`)
-5. Restart services (`./stop-services.sh` → `./start-services.sh`)
+2. SSH vào server → `cd /opt/shopee` → `git pull`
+3. Vào `shopee-fake` và rebuild services có thay đổi (nếu có)
+4. Build frontend: `cd merier-fe` → `npm run build -- --mode production`
+5. Restart services: `./stop-services.sh` → `./start-services.sh`
 6. Kiểm tra tại: http://shopee-fake.id.vn/
+
+**Cấu trúc thư mục trên server:**
+```
+/opt/shopee/
+├── merier-fe/          # Frontend (đã build dist/)
+├── shopee-fake/        # Backend services + docker-compose
+│   ├── docker-compose.yml
+│   ├── config-server/
+│   ├── eureka-server/
+│   ├── gateway/
+│   └── ... (các services khác)
+├── logs/               # Logs của các services
+├── start-services.sh   # Script khởi động
+├── stop-services.sh    # Script dừng
+└── check-services.sh   # Script kiểm tra status
+```
 
 ---
 
@@ -599,11 +672,17 @@ sudo systemctl reload nginx
 cd /opt/shopee
 tail -f logs/gateway.log
 tail -f logs/auth-service.log
+tail -f logs/eureka-server.log
 
 # Kiểm tra infrastructure
-cd /opt/shopee-infra
+cd /opt/shopee/shopee-fake
 docker-compose ps
 docker-compose logs mysql
+docker-compose logs redis
+docker-compose logs kafka
+
+# Kiểm tra JAR files có tồn tại không
+ls -la /opt/shopee/shopee-fake/*/target/*.jar
 ```
 
 ### Lỗi: Frontend không kết nối được API
@@ -631,12 +710,15 @@ docker-compose logs mysql
 
 ```bash
 # Kiểm tra MySQL container
-cd /opt/shopee-infra
+cd /opt/shopee/shopee-fake
 docker-compose ps mysql
 docker-compose logs mysql
 
 # Test connection
 mysql -h localhost -u sa -pThuan@417 shopee
+
+# Hoặc test bằng Docker
+docker exec -it mysql mysql -u sa -pThuan@417 shopee
 ```
 
 ---
