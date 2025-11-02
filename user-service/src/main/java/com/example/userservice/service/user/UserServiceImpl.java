@@ -57,6 +57,10 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public User SaveUser(RegisterRequest registerRequest) {
+        if (userRepository.existsByEmailIgnoreCase(registerRequest.getEmail())) {
+            throw new IllegalArgumentException("Email already exists");
+        }
+        
         Set<Role> initialRoles = new HashSet<>();
         initialRoles.add(Role.USER);
 

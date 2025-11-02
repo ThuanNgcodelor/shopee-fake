@@ -22,8 +22,12 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.ArrayList;
 import java.util.stream.Collectors;
+import org.springframework.http.ResponseEntity;
 
 @Service
 @RequiredArgsConstructor
@@ -146,10 +150,14 @@ public class OrderServiceImpl implements OrderService {
             }
         } catch (Exception e) {
             try {
+                // Since 1 user = 1 shop, set both userId and shopId to msg.getUserId()
+                // This is a notification for the user (order failed), not shop owner
                 SendNotificationRequest failNotification = SendNotificationRequest.builder()
                         .userId(msg.getUserId())
+                        .shopId(msg.getUserId())
                         .orderId(null)
                         .message("Order creation failed: " + e.getMessage())
+                        .isShopOwnerNotification(false) // false = user notification
                         .build();
                 kafkaTemplateSend.send(notificationTopic.name(), failNotification);
             } catch (Exception notifEx) {
@@ -182,6 +190,7 @@ public class OrderServiceImpl implements OrderService {
 
         try {
             notifyOrderPlaced(order);
+            notifyShopOwners(order);
         } catch (Exception e) {
             log.error("[CONSUMER] send notification failed: {}", e.getMessage(), e);
         }
@@ -356,11 +365,73 @@ public class OrderServiceImpl implements OrderService {
     }
 
     private void notifyOrderPlaced(Order order) {
+        // Since 1 user = 1 shop, set both userId and shopId to order.getUserId()
+        // This is a notification for the user (who placed the order), not shop owner
         SendNotificationRequest noti = SendNotificationRequest.builder()
                 .userId(order.getUserId())
+                .shopId(order.getUserId())
                 .orderId(order.getId())
                 .message("Order placed successfully with ID: " + order.getId())
+                .isShopOwnerNotification(false) // false = user notification
                 .build();
         kafkaTemplateSend.send(notificationTopic.name(), noti);
+    }
+
+    private void notifyShopOwners(Order order) {
+        if (order.getOrderItems() == null || order.getOrderItems().isEmpty()) {
+            return;
+        }
+
+        // Group order items by shop owner (product.userId)
+        Map<String, List<OrderItem>> itemsByShopOwner = new HashMap<>();
+        
+        for (OrderItem item : order.getOrderItems()) {
+            try {
+                ResponseEntity<ProductDto> productResponse = stockServiceClient.getProductById(item.getProductId());
+                if (productResponse != null && productResponse.getBody() != null) {
+                    ProductDto product = productResponse.getBody();
+                    String shopOwnerId = product.getUserId();
+                    
+                    if (shopOwnerId != null && !shopOwnerId.isBlank()) {
+                        itemsByShopOwner.computeIfAbsent(shopOwnerId, k -> new ArrayList<>()).add(item);
+                    }
+                }
+            } catch (Exception e) {
+                log.error("[CONSUMER] Failed to fetch product for notification: productId={}, error={}", 
+                    item.getProductId(), e.getMessage());
+            }
+        }
+
+        // Send notification to each shop owner
+        for (Map.Entry<String, List<OrderItem>> entry : itemsByShopOwner.entrySet()) {
+            String shopOwnerId = entry.getKey();
+            List<OrderItem> items = entry.getValue();
+            
+            int totalItems = items.stream().mapToInt(OrderItem::getQuantity).sum();
+            double totalAmount = items.stream().mapToDouble(OrderItem::getTotalPrice).sum();
+            
+            String message = String.format(
+                "Bạn có đơn hàng mới #%s với %d sản phẩm, tổng giá trị: %.0f VNĐ", 
+                order.getId(), totalItems, totalAmount
+            );
+            
+            try {
+                // Since 1 user = 1 shop, set both userId and shopId to shopOwnerId
+                // This is a notification for the shop owner, not the user who placed the order
+                SendNotificationRequest notification = SendNotificationRequest.builder()
+                        .userId(shopOwnerId)
+                        .shopId(shopOwnerId)
+                        .orderId(order.getId())
+                        .message(message)
+                        .isShopOwnerNotification(true) // true = shop owner notification
+                        .build();
+                kafkaTemplateSend.send(notificationTopic.name(), notification);
+                log.info("[CONSUMER] Sent notification to shop owner: shopId={}, orderId={}", 
+                    shopOwnerId, order.getId());
+            } catch (Exception e) {
+                log.error("[CONSUMER] Failed to send notification to shop owner: shopId={}, error={}", 
+                    shopOwnerId, e.getMessage());
+            }
+        }
     }
 }

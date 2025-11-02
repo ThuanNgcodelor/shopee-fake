@@ -16,7 +16,7 @@ import java.util.List;
 @Builder
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class User extends BaseEntity {
-    @Column(unique = true,nullable = false)
+    @Column(nullable = false)
     private String username;
 
     @Column(nullable = false)

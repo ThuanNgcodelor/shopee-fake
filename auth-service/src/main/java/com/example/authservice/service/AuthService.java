@@ -89,13 +89,26 @@ public class AuthService {
     }
 
     public boolean verifyOtp(String email, String otp) {
-        final String normalizedEmail = email.trim().toLowerCase();
+        final String normalizedEmail = normalizeEmail(email);
+        final String trimmedOtp = otp != null ? otp.trim() : "";
 
         String key = OTP_KEY_PREFIX + normalizedEmail;
         String value = redisTemplate.opsForValue().get(key); // dùng String
-        if (value == null) return false;
+        
+        log.debug("Verifying OTP - Email: {}, Normalized: {}, Key: {}, Stored OTP: {}, Received OTP: {}", 
+                email, normalizedEmail, key, value, trimmedOtp);
+        
+        if (value == null) {
+            log.warn("OTP not found in Redis for email: {}", normalizedEmail);
+            return false;
+        }
 
-        boolean isValid = value.equals(otp);
+        // Trim stored OTP as well to handle any edge cases
+        String storedOtp = value.trim();
+        boolean isValid = storedOtp.equals(trimmedOtp);
+        
+        log.debug("OTP comparison - Stored: '{}', Received: '{}', Match: {}", storedOtp, trimmedOtp, isValid);
+        
         if (isValid) {
             // Xoá OTP để không dùng lại
             redisTemplate.delete(key);
@@ -103,6 +116,9 @@ public class AuthService {
             // Đặt cờ đã xác minh, TTL ngắn
             String verifiedKey = OTP_VERIFIED_PREFIX + normalizedEmail;
             redisTemplate.opsForValue().set(verifiedKey, "1", VERIFIED_TTL);
+            log.info("OTP verified successfully for email: {}", normalizedEmail);
+        } else {
+            log.warn("OTP mismatch for email: {} - Expected: '{}', Got: '{}'", normalizedEmail, storedOtp, trimmedOtp);
         }
         return isValid;
     }
@@ -213,7 +229,6 @@ public class AuthService {
                     }
                 }
             } catch (FeignException.NotFound e) {
-                // User doesn't exist, will create new user below
                 log.info("User with email {} not found, will create new user", email);
             }
 

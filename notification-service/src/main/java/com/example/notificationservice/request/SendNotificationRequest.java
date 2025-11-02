@@ -13,6 +13,8 @@ import lombok.Setter;
 @Builder
 public class SendNotificationRequest {
     private String userId;
+    private String shopId;
     private String orderId;
     private String message;
+    private Boolean isShopOwnerNotification;
 }

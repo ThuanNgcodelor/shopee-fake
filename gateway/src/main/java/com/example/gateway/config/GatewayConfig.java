@@ -32,7 +32,7 @@ public class GatewayConfig {
                 .route("file-storage",r->r.path("/v1/file-storage/**")
                         .filters(f -> f.filter(filter))
                         .uri("lb://file-storage"))
-                .route("notification-service", r -> r.path("/v1/notification/**")
+                .route("notification-service", r -> r.path("/v1/notifications/**")
                         .filters(f -> f.filter(filter))
                         .uri("lb://notification-service"))
                 .route("order-service", r -> r.path("/v1/order/**")

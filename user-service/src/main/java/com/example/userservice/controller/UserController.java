@@ -47,8 +47,7 @@ public class UserController {
     @GetMapping("/getAll")
     public ResponseEntity<List<UserAdminDto>> getAll() {
         return ResponseEntity.ok(userService.getAllUsers().stream().map(
-                user -> modelMapper.map(user,UserAdminDto.class)
-        ).toList());
+                user -> modelMapper.map(user,UserAdminDto.class)).toList());
     }
     @GetMapping("/getUserForAdminByUserId/{id}")
     public ResponseEntity<UserAdminDto> getUserForAdminByUserId(@PathVariable String id) {
@@ -64,13 +63,9 @@ public class UserController {
     public ResponseEntity<AuthUserDto> getUserByEmail(@RequestParam String email) {
         User user = userService.getUserByEmail(email);
         AuthUserDto dto = modelMapper.map(user, AuthUserDto.class);
-        // Map primaryRole to role
         if (user.getPrimaryRole() != null) {
             dto.setRole(user.getPrimaryRole());
-            // Ensure roles set includes primaryRole
-            if (!dto.getRoles().contains(user.getPrimaryRole())) {
-                dto.getRoles().add(user.getPrimaryRole());
-            }
+            dto.getRoles().add(user.getPrimaryRole());
         }
         return ResponseEntity.ok(dto);
     }

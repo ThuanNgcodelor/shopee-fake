@@ -19,6 +19,13 @@ public class GlobalExceptionHandler {
         return ResponseEntity.badRequest().body(errors);
     }
 
+    @ExceptionHandler(ValidationException.class)
+    public ResponseEntity<Map<String, String>> handleValidationException(ValidationException ex) {
+        // Trả về validation errors từ user-service dưới dạng Map<String, String>
+        // Frontend sẽ parse và hiển thị từng field error
+        return ResponseEntity.badRequest().body(ex.getValidationErrors());
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, String>> handleGeneralException(Exception ex) {
         Map<String, String> error = Map.of("error", ex.getMessage());
