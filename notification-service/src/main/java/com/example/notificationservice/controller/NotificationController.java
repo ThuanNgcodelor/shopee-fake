@@ -56,6 +56,13 @@ public class NotificationController {
         return ResponseEntity.ok().build();
     }
 
+    @PutMapping("/markAllAsReadByUserId")
+    public ResponseEntity<Void> markAllAsReadByUserId(HttpServletRequest request) {
+        String userId = jwtUtil.ExtractUserId(request);
+        notificationService.markAllAsRead(userId);
+        return ResponseEntity.ok().build();
+    }
+
     @PutMapping("/markAllAsReadByShopId")
     public ResponseEntity<Void> markAllAsReadByShopId(HttpServletRequest request) {
         String shopId = jwtUtil.ExtractUserId(request);

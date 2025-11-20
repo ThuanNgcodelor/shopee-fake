@@ -20,7 +20,8 @@ spring:
             response-timeout: 60s
       globalcors:
         corsConfigurations:
-          '[/**]':
+          # CORS for REST API routes (exclude WebSocket)
+          '[/v1/**]':
             allowedOrigins:
               - http://localhost:5173                    # Development
               - http://shopee-fake.id.vn                  # Production Domain
@@ -35,3 +36,5 @@ spring:
             exposedHeaders:
               - Authorization
             allowCredentials: true
+          # WebSocket routes are handled by notification-service WebSocketConfig
+          # No CORS here to avoid duplicate headers

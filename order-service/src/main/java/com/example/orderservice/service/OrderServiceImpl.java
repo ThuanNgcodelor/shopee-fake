@@ -159,7 +159,12 @@ public class OrderServiceImpl implements OrderService {
                         .message("Order creation failed: " + e.getMessage())
                         .isShopOwnerNotification(false) // false = user notification
                         .build();
-                kafkaTemplateSend.send(notificationTopic.name(), failNotification);
+//                kafkaTemplateSend.send(notificationTopic.name(), failNotification);
+
+                String partitionKey = failNotification.getUserId() != null
+                        ? failNotification.getUserId()
+                        : failNotification.getShopId();
+                kafkaTemplateSend.send(notificationTopic.name(), partitionKey, failNotification);
             } catch (Exception notifEx) {
                 log.error("[CONSUMER] Failed to send failure notification: {}", notifEx.getMessage(), notifEx);
             }
@@ -374,7 +379,9 @@ public class OrderServiceImpl implements OrderService {
                 .message("Order placed successfully with ID: " + order.getId())
                 .isShopOwnerNotification(false) // false = user notification
                 .build();
-        kafkaTemplateSend.send(notificationTopic.name(), noti);
+//        kafkaTemplateSend.send(notificationTopic.name(), noti);
+        String partitionKey = noti.getUserId() != null ? noti.getUserId() : noti.getShopId();
+        kafkaTemplateSend.send(notificationTopic.name(), partitionKey, noti);
     }
 
     private void notifyShopOwners(Order order) {
@@ -425,9 +432,11 @@ public class OrderServiceImpl implements OrderService {
                         .message(message)
                         .isShopOwnerNotification(true) // true = shop owner notification
                         .build();
-                kafkaTemplateSend.send(notificationTopic.name(), notification);
-                log.info("[CONSUMER] Sent notification to shop owner: shopId={}, orderId={}", 
-                    shopOwnerId, order.getId());
+//                kafkaTemplateSend.send(notificationTopic.name(), notification);
+                String partitionKey = notification.getShopId() != null
+                        ? notification.getShopId()
+                        : notification.getUserId();
+                kafkaTemplateSend.send(notificationTopic.name(), partitionKey, notification);
             } catch (Exception e) {
                 log.error("[CONSUMER] Failed to send notification to shop owner: shopId={}, error={}", 
                     shopOwnerId, e.getMessage());

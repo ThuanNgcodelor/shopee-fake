@@ -463,8 +463,34 @@ server {
         try_files $uri $uri/ /index.html;
     }
 
+    # WebSocket Proxy - QUAN TRỌNG cho real-time notifications!
+    # WebSocket connections qua /api/ws/ sẽ được proxy đến Gateway
+    location /api/ws/ {
+        proxy_pass http://localhost:8080/ws/;
+        proxy_http_version 1.1;
+        
+        # WebSocket upgrade headers (QUAN TRỌNG!)
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        
+        # Standard proxy headers
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        
+        # WebSocket timeouts (lâu hơn vì là long-lived connection)
+        proxy_read_timeout 3600s;  # 1 hour for long-lived connections
+        proxy_send_timeout 3600s;
+        proxy_connect_timeout 60s;
+        
+        # Disable buffering for WebSocket (QUAN TRỌNG!)
+        proxy_buffering off;
+        proxy_cache_bypass $http_upgrade;
+    }
+
     # API Proxy - Quan trọng!
-    # Tất cả requests đến /api/* sẽ được proxy đến Gateway port 8080
+    # Tất cả requests đến /api/* (ngoại trừ /api/ws/) sẽ được proxy đến Gateway port 8080
     location /api/ {
         proxy_pass http://localhost:8080/;
         proxy_http_version 1.1;
@@ -493,6 +519,32 @@ server {
     }
 }
 ```
+
+---
+
+### 1.8.1. ⚡ WebSocket Configuration (Real-time Notifications)
+
+**WebSocket được cấu hình để đi qua Gateway** (không bypass như trước đây):
+
+**Kiến trúc:**
+```
+Frontend → Nginx (/api/ws/notifications) → Gateway (port 8080) → Notification Service (port 8009)
+```
+
+**Lợi ích:**
+- ✅ Chỉ cần mở port 8080 (Gateway) trên firewall
+- ✅ Tất cả traffic đi qua Gateway (consistent architecture)
+- ✅ Load balancing qua Eureka `lb://notification-service`
+- ✅ JWT authentication được xử lý trong notification-service
+
+**Cấu hình đã được thêm:**
+1. **Gateway**: Route `/ws/notifications/**` → `lb://notification-service`
+2. **Nginx**: Proxy `/api/ws/` → Gateway `/ws/`
+3. **Frontend**: Kết nối qua Gateway (development: `localhost:8080`, production: `/api/ws/notifications`)
+
+**URLs:**
+- Development: `ws://localhost:8080/ws/notifications`
+- Production: `ws://shopee-fake.id.vn/api/ws/notifications` (qua Nginx)
 
 ---
 
